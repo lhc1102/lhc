@@ -1,0 +1,116 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Map with Toggleable Tracking from ThingSpeak</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 80vh; width: 100%; }
+    #startButton {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <button id="startButton">Bắt đầu vẽ đường đi</button>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Thông tin kênh ThingSpeak
+    var channelID = '2640613';
+    var readAPIKey = 'RQ3T9CIDUGWU42U8';
+
+    // Khởi tạo mảng lưu trữ các điểm đã di chuyển
+    var path = [];
+    var tracking = false;  // Biến kiểm soát quá trình theo dõi
+    var trackingInterval;  // Biến lưu trữ khoảng thời gian lấy dữ liệu
+
+    // Khởi tạo bản đồ
+    var map = L.map('map').setView([15.0, 108.0], 13); // Tọa độ mặc định ban đầu
+
+    // Thêm lớp bản đồ từ OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Hàm lấy dữ liệu từ ThingSpeak
+    function fetchThingSpeakData() {
+      if (!tracking) return;  // Nếu không theo dõi, không làm gì
+
+      var url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          var feed = data.feeds[0];  // Lấy dữ liệu mới nhất
+          var latitude = parseFloat(feed.field1);
+          var longitude = parseFloat(feed.field2);
+
+          // Thêm vị trí mới vào mảng path
+          path.push([latitude, longitude]);
+
+          // Vẽ lại marker tại vị trí mới
+          L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`Vị trí hiện tại: <br>Vĩ độ: ${latitude}, Kinh độ: ${longitude}`)
+            .openPopup();
+
+          // Xóa polyline cũ (nếu có) và vẽ lại đường mới
+          L.polyline(path, { color: 'blue' }).addTo(map);
+
+          // Tự động điều chỉnh tầm nhìn của bản đồ theo tuyến đường đã đi
+          map.setView([latitude, longitude], 13);
+        })
+        .catch(error => console.log('Error fetching data: ' + error));
+    }
+
+    // Hàm bật/tắt theo dõi
+    function toggleTracking() {
+      if (tracking) {
+        // Nếu đang theo dõi, dừng theo dõi
+        clearInterval(trackingInterval);  // Dừng khoảng thời gian lấy dữ liệu
+        tracking = false;
+        localStorage.setItem('tracking', 'false');  // Lưu trạng thái theo dõi vào localStorage
+        document.getElementById('startButton').innerHTML = "Bắt đầu vẽ đường đi";
+        document.getElementById('startButton').style.backgroundColor = "#28a745";  // Đổi màu nút sang xanh
+      } else {
+        // Nếu không theo dõi, bắt đầu theo dõi
+        tracking = true;
+        localStorage.setItem('tracking', 'true');  // Lưu trạng thái theo dõi vào localStorage
+        document.getElementById('startButton').innerHTML = "Dừng vẽ đường đi";
+        document.getElementById('startButton').style.backgroundColor = "#dc3545";  // Đổi màu nút sang đỏ
+        trackingInterval = setInterval(fetchThingSpeakData, 15000);  // Gọi hàm liên tục sau mỗi 15 giây
+      }
+    }
+
+    // Hàm khởi tạo lại trạng thái từ localStorage sau khi làm mới trang
+    function initializeTracking() {
+      var savedTrackingState = localStorage.getItem('tracking');
+
+      if (savedTrackingState === 'true') {
+        // Nếu trạng thái theo dõi được lưu là "true", bật lại theo dõi
+        tracking = true;
+        document.getElementById('startButton').innerHTML = "Dừng vẽ đường đi";
+        document.getElementById('startButton').style.backgroundColor = "#dc3545";  // Đổi màu nút sang đỏ
+        trackingInterval = setInterval(fetchThingSpeakData, 15000);  // Gọi hàm liên tục sau mỗi 15 giây
+      }
+    }
+
+    // Gọi hàm khi trang được tải
+    window.onload = function() {
+      initializeTracking();  // Kiểm tra và khôi phục trạng thái theo dõi
+      fetchThingSpeakData(); // Lấy dữ liệu ngay lập tức khi trang được tải
+    };
+
+    // Bắt sự kiện nhấn nút "Bắt đầu vẽ đường đi"
+    document.getElementById('startButton').addEventListener('click', toggleTracking);
+  </script>
+</body>
+</html>
