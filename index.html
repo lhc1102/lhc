@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <title>Leaflet Map with Toggleable Tracking from ThingSpeak</title>
@@ -77,37 +77,16 @@
         // Nếu đang theo dõi, dừng theo dõi
         clearInterval(trackingInterval);  // Dừng khoảng thời gian lấy dữ liệu
         tracking = false;
-        localStorage.setItem('tracking', 'false');  // Lưu trạng thái theo dõi vào localStorage
         document.getElementById('startButton').innerHTML = "Bắt đầu vẽ đường đi";
         document.getElementById('startButton').style.backgroundColor = "#28a745";  // Đổi màu nút sang xanh
       } else {
         // Nếu không theo dõi, bắt đầu theo dõi
         tracking = true;
-        localStorage.setItem('tracking', 'true');  // Lưu trạng thái theo dõi vào localStorage
         document.getElementById('startButton').innerHTML = "Dừng vẽ đường đi";
         document.getElementById('startButton').style.backgroundColor = "#dc3545";  // Đổi màu nút sang đỏ
         trackingInterval = setInterval(fetchThingSpeakData, 15000);  // Gọi hàm liên tục sau mỗi 15 giây
       }
     }
-
-    // Hàm khởi tạo lại trạng thái từ localStorage sau khi làm mới trang
-    function initializeTracking() {
-      var savedTrackingState = localStorage.getItem('tracking');
-
-      if (savedTrackingState === 'true') {
-        // Nếu trạng thái theo dõi được lưu là "true", bật lại theo dõi
-        tracking = true;
-        document.getElementById('startButton').innerHTML = "Dừng vẽ đường đi";
-        document.getElementById('startButton').style.backgroundColor = "#dc3545";  // Đổi màu nút sang đỏ
-        trackingInterval = setInterval(fetchThingSpeakData, 15000);  // Gọi hàm liên tục sau mỗi 15 giây
-      }
-    }
-
-    // Gọi hàm khi trang được tải
-    window.onload = function() {
-      initializeTracking();  // Kiểm tra và khôi phục trạng thái theo dõi
-      fetchThingSpeakData(); // Lấy dữ liệu ngay lập tức khi trang được tải
-    };
 
     // Bắt sự kiện nhấn nút "Bắt đầu vẽ đường đi"
     document.getElementById('startButton').addEventListener('click', toggleTracking);
