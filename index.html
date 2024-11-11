@@ -4,11 +4,34 @@
   <div id="map" style="width:100%;height:100vh;"></div>
   <script>
     function initMap() {
+      // Tạo một đối tượng bản đồ với vị trí mặc định
       let options = {
-        center: {lat: 16.072163491469226, lng: 108.22690536081757},
         zoom: 15
       };
       let map = new map4d.Map(document.getElementById("map"), options);
+
+      // Kiểm tra quyền truy cập vị trí của người dùng
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+          // Lấy tọa độ hiện tại của người dùng
+          let userLat = position.coords.latitude;
+          let userLng = position.coords.longitude;
+
+          // Cập nhật bản đồ với vị trí của người dùng
+          map.setCenter({ lat: userLat, lng: userLng });
+
+          // Thêm marker tại vị trí của người dùng
+          let marker = new map4d.Marker({
+            position: { lat: userLat, lng: userLng },
+            map: map,
+            title: "Vị trí của bạn"
+          });
+        }, function() {
+          alert("Không thể xác định vị trí của bạn.");
+        });
+      } else {
+        alert("Trình duyệt của bạn không hỗ trợ tính năng xác định vị trí.");
+      }
     }
   </script>
   <script src="https://api.map4d.vn/sdk/map/js?version=2.6&key=e7eab6bf2ab4e68e2061486e3289a078&mapId=67325559731647478230ac34&callback=initMap"></script>
