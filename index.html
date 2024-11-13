@@ -1,39 +1,64 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geolocation and Route with Leaflet</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; width: 100%; }
+        #directionsBtn {
+            position: absolute; top: 10px; left: 10px; padding: 15px 30px; background: red; color: white; font-size: 18px;
+            border: 2px solid white; border-radius: 5px; display: none; z-index: 1000; cursor: pointer;
+        }
+        #directionsBtn:hover { background: darkred; }
+    </style>
+</head>
 <body>
-  <div id="map" style="width:100%;height:100vh;"></div>
-  <script>
-    function initMap() {
-      // Tạo một đối tượng bản đồ với vị trí mặc định
-      let options = {
-        zoom: 15
-      };
-      let map = new map4d.Map(document.getElementById("map"), options);
+    <div id="map"></div>
+    <button id="directionsBtn">Vẽ đường đi</button>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([20, 105], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-      // Kiểm tra quyền truy cập vị trí của người dùng
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-          // Lấy tọa độ hiện tại của người dùng
-          let userLat = position.coords.latitude;
-          let userLng = position.coords.longitude;
-
-          // Cập nhật bản đồ với vị trí của người dùng
-          map.setCenter({ lat: userLat, lng: userLng });
-
-          // Thêm marker tại vị trí của người dùng
-          let marker = new map4d.Marker({
-            position: { lat: userLat, lng: userLng },
-            map: map,
-            title: "Vị trí của bạn"
-          });
-        }, function() {
-          alert("Không thể xác định vị trí của bạn.");
+        let marker, routeLayer, destinationMarker, destination;
+        
+        // Cập nhật vị trí hiện tại
+        navigator.geolocation.watchPosition(pos => {
+            const latlng = [pos.coords.latitude, pos.coords.longitude];
+            if (!marker) marker = L.marker(latlng).addTo(map).bindPopup("You are here!").openPopup();
+            else marker.setLatLng(latlng);
+            map.panTo(latlng);
+            if (destination) drawRoute(latlng, destination);
         });
-      } else {
-        alert("Trình duyệt của bạn không hỗ trợ tính năng xác định vị trí.");
-      }
-    }
-  </script>
-  <script src="https://api.map4d.vn/sdk/map/js?version=2.6&key=e7eab6bf2ab4e68e2061486e3289a078&mapId=67325559731647478230ac34&callback=initMap"></script>
+
+        // Bắt sự kiện click trên bản đồ để thay đổi điểm đến
+        map.on('click', e => {
+            destination = e.latlng;
+            // Nếu có marker điểm đến cũ, cập nhật lại vị trí
+            if (destinationMarker) destinationMarker.setLatLng(destination);
+            else destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
+            document.getElementById("directionsBtn").style.display = "block";
+        });
+
+        // Khi nhấn nút vẽ đường đi
+        document.getElementById("directionsBtn").onclick = () => {
+            if (marker && destination) drawRoute(marker.getLatLng(), destination);
+        };
+
+        // Hàm vẽ đường đi
+        function drawRoute(start, end) {
+            const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson`;
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const route = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+                    if (routeLayer) map.removeLayer(routeLayer);  // Xóa tuyến đường cũ nếu có
+                    routeLayer = L.polyline(route, { color: 'blue' }).addTo(map);
+                });
+        }
+    </script>
 </body>
 </html>
