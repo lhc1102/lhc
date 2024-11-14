@@ -8,20 +8,28 @@
     <style>
         #map { height: 100vh; width: 100%; }
         #directionsBtn {
-            position: absolute; top: 10px; left: 10px; padding: 10px; background: white; border: 1px solid black;
-            cursor: pointer; display: none; z-index: 1000;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background: white;
+            border: 1px solid black;
+            cursor: pointer;
+            display: none;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <button id="directionsBtn">Vẽ đường đi</button>
+
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         const map = L.map('map').setView([20.0, 105.0], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-        let marker, routeLayer, destination, destinationMarker;
+        let marker, routeLayer, destination, destinationMarker, autoUpdateRoute = false;
 
         // Theo dõi vị trí hiện tại và cập nhật marker vị trí hiện tại
         if (navigator.geolocation) {
@@ -34,6 +42,11 @@
                         marker.setLatLng(latlng);
                     }
                     map.panTo(latlng);
+
+                    // Tự động cập nhật đường đi nếu đã chọn điểm đến và kích hoạt tính năng tự động cập nhật
+                    if (destination && autoUpdateRoute) {
+                        drawRoute(latlng, destination);
+                    }
                 },
                 err => alert("Error: " + err.message),
                 { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
@@ -53,24 +66,25 @@
             document.getElementById("directionsBtn").style.display = "block"; // Hiển thị nút vẽ đường đi
         });
 
-        // Khi nhấn nút "Vẽ đường đi", bắt đầu vẽ tuyến đường
+        // Bắt sự kiện click vào nút "Vẽ đường đi"
         document.getElementById("directionsBtn").onclick = () => {
             if (marker && destination) {
                 const currentPos = marker.getLatLng();
-                drawRoute(currentPos, destination); // Vẽ đường từ vị trí hiện tại đến điểm đến
+                autoUpdateRoute = true; // Bật cập nhật tự động
+                drawRoute([currentPos.lat, currentPos.lng], destination); // Vẽ đường từ vị trí hiện tại đến điểm đến
             }
         };
 
         // Hàm vẽ tuyến đường giữa hai điểm
         function drawRoute(start, end) {
-            const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end.lng},${end.lat}?geometries=geojson&overview=full`;
 
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     if (!data.routes.length) return console.error("No route found");
                     const route = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-                    
+
                     if (routeLayer) map.removeLayer(routeLayer); // Xóa tuyến đường cũ nếu có
                     routeLayer = L.polyline(route, { color: 'blue' }).addTo(map);
                 })
