@@ -12,7 +12,7 @@
             top: 10px;
             left: 10px;
             padding: 10px;
-            background: white;
+            background-color: white;
             border: 1px solid black;
             cursor: pointer;
             display: none;
@@ -26,57 +26,80 @@
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
+        // Khởi tạo bản đồ
         const map = L.map('map').setView([20.0, 105.0], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-        let marker, routeLayer, destination, destinationMarker, autoUpdateRoute = false;
+        // Thêm lớp gạch OpenStreetMap (bản đồ nền)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-        // Theo dõi vị trí hiện tại và cập nhật marker vị trí hiện tại
+        let marker, routeLayer, destination, destinationMarker;
+
+        // Kiểm tra vị trí người dùng và cập nhật vị trí của họ trên bản đồ
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition(
-                pos => {
-                    const latlng = [pos.coords.latitude, pos.coords.longitude];
-                    if (!marker) {
-                        marker = L.marker(latlng).addTo(map).bindPopup("You are here!").openPopup();
-                    } else {
-                        marker.setLatLng(latlng);
-                    }
-                    map.panTo(latlng);
+                function (position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
 
-                    // Tự động cập nhật đường đi nếu đã chọn điểm đến và kích hoạt tính năng tự động cập nhật
-                    if (destination && autoUpdateRoute) {
-                        drawRoute(latlng, destination);
+                    // Nếu marker chưa tồn tại, tạo mới marker
+                    if (!marker) {
+                        marker = L.marker([lat, lon]).addTo(map)
+                            .bindPopup("You are here!").openPopup();
+                    } else {
+                        // Di chuyển marker đến vị trí mới
+                        marker.setLatLng([lat, lon]);
                     }
+
+                    // Cập nhật đường đi nếu đã chọn điểm đến
+                    if (destination) {
+                        drawRoute([lat, lon], destination);
+                    }
+
+                    // Di chuyển bản đồ theo vị trí hiện tại mà không thay đổi mức zoom
+                    map.panTo([lat, lon]);
                 },
-                err => alert("Error: " + err.message),
-                { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+                function (error) {
+                    alert("Unable to retrieve your location. Error: " + error.message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 10000,
+                    timeout: 10000
+                }
             );
         } else {
             alert("Geolocation is not supported by your browser.");
         }
 
-        // Bắt sự kiện click trên bản đồ để đặt điểm đến
-        map.on('click', e => {
-            destination = e.latlng;
+        // Bắt sự kiện click trên bản đồ để chọn điểm đến
+        map.on('click', function (e) {
+            destination = e.latlng;  // Lưu tọa độ điểm đến
+
+            // Nếu đã có marker cho điểm đến trước đó, xóa marker cũ
             if (destinationMarker) {
-                destinationMarker.setLatLng(destination);
-            } else {
-                destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
+                map.removeLayer(destinationMarker);
             }
-            document.getElementById("directionsBtn").style.display = "block"; // Hiển thị nút vẽ đường đi
+
+            // Thêm marker cho điểm đến và mở popup
+            destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
+
+            // Hiển thị nút "Vẽ đường đi"
+            document.getElementById("directionsBtn").style.display = "block";
         });
 
         // Bắt sự kiện click vào nút "Vẽ đường đi"
-        document.getElementById("directionsBtn").onclick = () => {
+        document.getElementById("directionsBtn").addEventListener("click", function () {
             if (marker && destination) {
-                const currentPos = marker.getLatLng();
-                autoUpdateRoute = true; // Bật cập nhật tự động
-                drawRoute([currentPos.lat, currentPos.lng], destination); // Vẽ đường từ vị trí hiện tại đến điểm đến
+                const currentPos = marker.getLatLng();  // Lấy tọa độ hiện tại
+                drawRoute([currentPos.lat, currentPos.lng], destination);  // Vẽ đường từ vị trí hiện tại tới điểm đến
             }
-        };
+        });
 
         // Hàm vẽ tuyến đường giữa hai điểm
         function drawRoute(start, end) {
+            // Gọi OSRM API để lấy đường đi
             const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end.lng},${end.lat}?geometries=geojson&overview=full`;
 
             fetch(url)
@@ -85,11 +108,17 @@
                     if (!data.routes.length) return console.error("No route found");
                     const route = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
 
-                    if (routeLayer) map.removeLayer(routeLayer); // Xóa tuyến đường cũ nếu có
+                    // Nếu đã có routeLayer, xóa nó trước khi thêm tuyến mới
+                    if (routeLayer) {
+                        map.removeLayer(routeLayer);
+                    }
+
+                    // Vẽ đường đi sử dụng polyline
                     routeLayer = L.polyline(route, { color: 'blue' }).addTo(map);
                 })
                 .catch(err => console.error("Error fetching route:", err));
         }
     </script>
+
 </body>
 </html>
