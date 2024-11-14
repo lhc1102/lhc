@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,12 +24,14 @@
 
         let marker, routeLayer, destinationMarker, destination;
         
-        // Cập nhật vị trí hiện tại
+        // Cập nhật vị trí hiện tại và vẽ lại đường đi nếu có đích
         navigator.geolocation.watchPosition(pos => {
             const latlng = [pos.coords.latitude, pos.coords.longitude];
             if (!marker) marker = L.marker(latlng).addTo(map).bindPopup("You are here!").openPopup();
             else marker.setLatLng(latlng);
             map.panTo(latlng);
+
+            // Vẽ lại đường đi nếu có điểm đến
             if (destination) drawRoute(latlng, destination);
         });
 
@@ -41,12 +42,10 @@
             if (destinationMarker) destinationMarker.setLatLng(destination);
             else destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
             document.getElementById("directionsBtn").style.display = "block";
-        });
 
-        // Khi nhấn nút vẽ đường đi
-        document.getElementById("directionsBtn").onclick = () => {
-            if (marker && destination) drawRoute(marker.getLatLng(), destination);
-        };
+            // Vẽ đường đi ngay khi có điểm đến mới
+            if (marker) drawRoute(marker.getLatLng(), destination);
+        });
 
         // Hàm vẽ đường đi
         function drawRoute(start, end) {
