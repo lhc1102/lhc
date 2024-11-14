@@ -23,37 +23,55 @@
 
         let marker, routeLayer, destination, destinationMarker;
 
+        // Theo dõi vị trí hiện tại và cập nhật marker vị trí hiện tại
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition(
                 pos => {
                     const latlng = [pos.coords.latitude, pos.coords.longitude];
-                    marker ? marker.setLatLng(latlng) : marker = L.marker(latlng).addTo(map).bindPopup("You are here!").openPopup();
+                    if (!marker) {
+                        marker = L.marker(latlng).addTo(map).bindPopup("You are here!").openPopup();
+                    } else {
+                        marker.setLatLng(latlng);
+                    }
                     map.panTo(latlng);
-                    if (destination) drawRoute(latlng, destination);
                 },
                 err => alert("Error: " + err.message),
                 { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
             );
-        } else alert("Geolocation is not supported by your browser.");
+        } else {
+            alert("Geolocation is not supported by your browser.");
+        }
 
+        // Bắt sự kiện click trên bản đồ để đặt điểm đến
         map.on('click', e => {
             destination = e.latlng;
-            destinationMarker ? destinationMarker.setLatLng(destination) : destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
-            document.getElementById("directionsBtn").style.display = "block";
+            if (destinationMarker) {
+                destinationMarker.setLatLng(destination);
+            } else {
+                destinationMarker = L.marker(destination).addTo(map).bindPopup("Điểm đến").openPopup();
+            }
+            document.getElementById("directionsBtn").style.display = "block"; // Hiển thị nút vẽ đường đi
         });
 
+        // Khi nhấn nút "Vẽ đường đi", bắt đầu vẽ tuyến đường
         document.getElementById("directionsBtn").onclick = () => {
-            if (marker && destination) drawRoute(marker.getLatLng(), destination);
+            if (marker && destination) {
+                const currentPos = marker.getLatLng();
+                drawRoute(currentPos, destination); // Vẽ đường từ vị trí hiện tại đến điểm đến
+            }
         };
 
+        // Hàm vẽ tuyến đường giữa hai điểm
         function drawRoute(start, end) {
-            const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end.lng},${end.lat}?geometries=geojson&overview=full`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full`;
+
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     if (!data.routes.length) return console.error("No route found");
                     const route = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-                    routeLayer && map.removeLayer(routeLayer);
+                    
+                    if (routeLayer) map.removeLayer(routeLayer); // Xóa tuyến đường cũ nếu có
                     routeLayer = L.polyline(route, { color: 'blue' }).addTo(map);
                 })
                 .catch(err => console.error("Error fetching route:", err));
