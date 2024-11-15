@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geolocation and Route with Leaflet</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <title>Leaflet Map with Continuous Tracking</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        #map { height: 100vh; width: 100%; }
+        #map { height: 80vh; width: 100%; }
         #directionsBtn {
             position: absolute;
             top: 10px;
@@ -15,110 +15,130 @@
             background-color: white;
             border: 1px solid black;
             cursor: pointer;
-            display: none;
             z-index: 1000;
         }
     </style>
 </head>
 <body>
-    <div id="map"></div>
     <button id="directionsBtn">Vẽ đường đi</button>
+    <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
+        var channelID = '2640613'; // Thay bằng Channel ID của bạn
+        var readAPIKey = 'RQ3T9CIDUGWU42U8'; // Thay bằng Read API Key của bạn
+
+        var map, userMarker, thingSpeakMarker, routeLayer;
+        var userPosition = null;
+        var thingSpeakPosition = null;
+
         // Khởi tạo bản đồ
-        const map = L.map('map').setView([20.0, 105.0], 13);
+        function initializeMap(lat, lon) {
+            map = L.map('map').setView([lat, lon], 13);
 
-        // Thêm lớp gạch OpenStreetMap (bản đồ nền)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        let marker, routeLayer, destination, destinationMarker;
-
-        // Kiểm tra vị trí người dùng và cập nhật vị trí của họ trên bản đồ
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(
-                function (position) {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-
-                    // Nếu marker chưa tồn tại, tạo mới marker
-                    if (!marker) {
-                        marker = L.marker([lat, lon], {icon: L.icon({iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png'})}).addTo(map)
-                            .bindPopup("You are here!").openPopup();
-                    } else {
-                        // Di chuyển marker đến vị trí mới
-                        marker.setLatLng([lat, lon]);
-                    }
-
-                    // Cập nhật đường đi nếu đã chọn điểm đến
-                    if (destination) {
-                        drawRoute([lat, lon], destination);
-                    }
-
-                    // Di chuyển bản đồ theo vị trí hiện tại mà không thay đổi mức zoom
-                    map.panTo([lat, lon]);
-                },
-                function (error) {
-                    alert("Unable to retrieve your location. Error: " + error.message);
-                },
-                {
-                    enableHighAccuracy: true,
-                    maximumAge: 10000,
-                    timeout: 10000
-                }
-            );
-        } else {
-            alert("Geolocation is not supported by your browser.");
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
         }
 
-        // Bắt sự kiện click trên bản đồ để chọn điểm đến
-        map.on('click', function (e) {
-            destination = e.latlng;  // Lưu tọa độ điểm đến
-
-            // Nếu đã có marker cho điểm đến trước đó, xóa marker cũ
-            if (destinationMarker) {
-                map.removeLayer(destinationMarker);
-            }
-
-            // Thêm marker cho điểm đến và mở popup với màu đỏ
-            destinationMarker = L.marker(destination, {icon: L.icon({iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]})}).addTo(map)
-                .bindPopup("Điểm đến").openPopup();
-
-            // Hiển thị nút "Vẽ đường đi"
-            document.getElementById("directionsBtn").style.display = "block";
-        });
-
-        // Bắt sự kiện click vào nút "Vẽ đường đi"
-        document.getElementById("directionsBtn").addEventListener("click", function () {
-            if (marker && destination) {
-                const currentPos = marker.getLatLng();  // Lấy tọa độ hiện tại
-                drawRoute([currentPos.lat, currentPos.lng], destination);  // Vẽ đường từ vị trí hiện tại tới điểm đến
-            }
-        });
-
-        // Hàm vẽ tuyến đường giữa hai điểm
-        function drawRoute(start, end) {
-            // Gọi OSRM API để lấy đường đi
-            const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end.lng},${end.lat}?geometries=geojson&overview=full`;
+        // Lấy dữ liệu từ ThingSpeak
+        function fetchThingSpeakData() {
+            var url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`;
 
             fetch(url)
-                .then(res => res.json())
+                .then(response => response.json())
                 .then(data => {
-                    if (!data.routes.length) return console.error("No route found");
-                    const route = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+                    var feed = data.feeds[0];
+                    var latitude = parseFloat(feed.field1);
+                    var longitude = parseFloat(feed.field2);
 
-                    // Nếu đã có routeLayer, xóa nó trước khi thêm tuyến mới
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                        thingSpeakPosition = [latitude, longitude];
+
+                        // Cập nhật hoặc tạo marker đỏ
+                        if (thingSpeakMarker) {
+                            thingSpeakMarker.setLatLng(thingSpeakPosition)
+                                .bindPopup(`Vị trí người già: <br>Vĩ độ: ${latitude}, Kinh độ: ${longitude}`)
+                                .openPopup();
+                        } else {
+                            thingSpeakMarker = L.marker(thingSpeakPosition, {
+                                icon: L.icon({ iconUrl: 'https://example.com/red-marker.png', iconSize: [25, 41] })
+                            }).addTo(map)
+                                .bindPopup(`Vị trí người già: <br>Vĩ độ: ${latitude}, Kinh độ: ${longitude}`)
+                                .openPopup();
+                        }
+
+                        // Nếu đã có vị trí người dùng, vẽ lại đường đi
+                        if (userPosition) {
+                            drawRoute(userPosition, thingSpeakPosition);
+                        }
+                    } else {
+                        console.log('Invalid ThingSpeak data:', feed);
+                    }
+                })
+                .catch(error => console.log('Error fetching data from ThingSpeak:', error));
+        }
+
+        // Theo dõi vị trí người dùng
+        function trackUserPosition() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(function (position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    userPosition = [lat, lon];
+
+                    if (!userMarker) {
+                        initializeMap(lat, lon);
+                        userMarker = L.marker(userPosition, { color: 'green' }).addTo(map)
+                            .bindPopup("Vị trí của bạn").openPopup();
+                    } else {
+                        userMarker.setLatLng(userPosition);
+                    }
+
+                    // Nếu đã có vị trí người già, vẽ lại đường đi
+                    if (thingSpeakPosition) {
+                        drawRoute(userPosition, thingSpeakPosition);
+                    }
+                });
+            } else {
+                alert("Trình duyệt của bạn không hỗ trợ Geolocation.");
+            }
+        }
+
+        // Vẽ đường đi giữa hai điểm
+        function drawRoute(start, end) {
+            var url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?geometries=geojson&overview=full`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.routes.length === 0) {
+                        alert("Không tìm thấy tuyến đường.");
+                        return;
+                    }
+
+                    var route = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
                     if (routeLayer) {
                         map.removeLayer(routeLayer);
                     }
-
-                    // Vẽ đường đi sử dụng polyline
                     routeLayer = L.polyline(route, { color: 'blue' }).addTo(map);
                 })
-                .catch(err => console.error("Error fetching route:", err));
+                .catch(err => console.log('Lỗi khi lấy đường đi:', err));
         }
+
+        // Bắt sự kiện nhấn nút "Vẽ đường đi"
+        document.getElementById('directionsBtn').addEventListener("click", function () {
+            if (userPosition && thingSpeakPosition) {
+                drawRoute(userPosition, thingSpeakPosition);
+            } else {
+                alert("Chưa có đủ thông tin vị trí để vẽ đường.");
+            }
+        });
+
+        // Khởi chạy tính năng
+        fetchThingSpeakData();
+        setInterval(fetchThingSpeakData, 15000); // Cập nhật từ ThingSpeak mỗi 15 giây
+        trackUserPosition();
     </script>
 </body>
 </html>
